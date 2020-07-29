@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage, misc
 import scipy.misc
 import imageio
+import cv2
 
 # http://scikit-image.org/docs/dev/auto_examples/filters/plot_denoise.html
 from skimage.util import random_noise
@@ -45,7 +46,6 @@ def read_image_w_noise(s_image_path):
     tmp_image = read_image(s_image_path)
     sigma = 0.155
     noisy = random_noise(tmp_image, var=sigma ** 2)
-    # image = scipy.misc.imresize(tmp_image, nd_img_size)
     return np.array(noisy)
 
 def read_lst_images_w_noise2(lst_images_path,nd_patch_size, n_patch_step):
@@ -75,9 +75,7 @@ def read_lst_images(lst_images_path,nd_patch_size, n_patch_step, b_work_on_patch
             lst_location.extend(tmp_location_slice)
         return lst_slices,lst_location
     else:
-        lst_images = []
-        for image_path in lst_images_path:
-            lst_images.append(read_image(image_path))
+        lst_images = [read_image(image_path) for image_path in lst_images_path]
         return np.array(lst_images)
 
 def read_dataset_images(s_dataset_url , nd_img_size ,n_number_count):
@@ -92,10 +90,11 @@ def read_dataset_images(s_dataset_url , nd_img_size ,n_number_count):
     return np.array(lst_images)
 
 def read_image(s_image_path):
-    tmp_image = scipy.misc.imread(s_image_path)[100:240,0:360]/127.5 -1.
-    #sigma = 0.155
-    #noisy = random_noise(tmp_image, var=sigma ** 2)
-    # image = scipy.misc.imresize(tmp_image, nd_img_size)
+    tmp_image = cv2.imread(s_image_path)
+    tmp_image = cv2.cvtColor(tmp_image, cv2.COLOR_BGR2GRAY)
+    tmp_image = tmp_image[int(0.125*1080):int(0.875*1080),int(0.125*720):int(0.875*720)]/127.5 -1.
+    tmp_image = cv2.resize(tmp_image, (180, 270), interpolation=cv2.INTER_NEAREST)
+    tmp_image = tmp_image[..., np.newaxis]
     return np.array(tmp_image)
 
 
