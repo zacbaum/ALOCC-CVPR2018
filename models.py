@@ -6,6 +6,7 @@ from utils import *
 from kh_tools import *
 import logging
 import matplotlib.pyplot as plt
+import time
 
 class ALOCC_Model(object):
   def __init__(self, sess,
@@ -92,6 +93,7 @@ class ALOCC_Model(object):
       specific_idx = np.where(mnist.train.labels == self.attention_label)[0]
       self.data = mnist.train.images[specific_idx].reshape(-1, 28, 28, 1)
       self.c_dim = 1
+
     elif self.dataset_name == 'UCSD':
       self.nStride = n_stride
       self.patch_size = nd_patch_size
@@ -105,6 +107,15 @@ class ALOCC_Model(object):
 
       self.data = lst_forced_fetch_data
       self.c_dim = 1
+
+    elif self.dataset_name == 'data-alocc':
+      lst_image_paths = []
+      for sImageDirFiles in glob(os.path.join(self.dataset_address, self.input_fname_pattern)):
+        lst_image_paths.append(sImageDirFiles)
+
+      self.data = lst_image_paths
+      self.c_dim = 1
+
     else:
       assert('Error in loading dataset')
 
@@ -180,6 +191,7 @@ class ALOCC_Model(object):
 
     if config.dataset == 'mnist':
       sample = self.data[0:self.sample_num]
+
     elif config.dataset =='UCSD':
       if self.b_work_on_patch:
         sample_files = self.data[0:10]
@@ -189,9 +201,14 @@ class ALOCC_Model(object):
       sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
       sample = sample[0:self.sample_num]
 
+    elif config.dataset =='data-alocc':
+      sample_files = self.data[0:self.sample_num]
+      sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
+      sample = sample[0:self.sample_num]
+
     # export images
     sample_inputs = np.array(sample).astype(np.float32)
-    scipy.misc.imsave('./{}/train_input_samples.jpg'.format(config.sample_dir), montage(sample_inputs[:,:,:,0]))
+    imageio.imwrite('./{}/train_input_samples.jpg'.format(config.sample_dir), montage(sample_inputs[:,:,:,0]))
 
     # load previous checkpoint
     counter = 1
@@ -202,10 +219,10 @@ class ALOCC_Model(object):
     else:
       print(" [!] Load failed...")
 
-
     # load traning data
     if config.dataset == 'mnist':
       sample_w_noise = get_noisy_data(self.data)
+    
     if config.dataset == 'UCSD':
       sample_files = self.data
       sample, _ = read_lst_images(sample_files, self.patch_size, self.patch_step, self.b_work_on_patch)
@@ -213,22 +230,37 @@ class ALOCC_Model(object):
       sample_w_noise,_ = read_lst_images_w_noise(sample_files, self.patch_size, self.patch_step)
       sample_w_noise = np.array(sample_w_noise).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
 
+    if config.dataset == 'data-alocc':
+      sample_files = self.data
+      t = time.time()
+      sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
+      t = time.time() - t
+      print(" [*] Loaded Data in {:3f}s".format(t))
+      sample_w_noise = get_noisy_data(sample)
+      print(" [*] Loaded Noisy Data")
+      #sample_w_noise = read_lst_images_w_noise2(sample_files, None, None)
+
     for epoch in xrange(config.epoch):
       print('Epoch ({}/{})-------------------------------------------------'.format(epoch,config.epoch))
       if config.dataset == 'mnist':
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size
+
       elif config.dataset == 'UCSD':
         batch_idxs = min(len(sample), config.train_size) // config.batch_size
 
-      # for detecting valuable epoch that we must stop training step
-      # sample_input_for_test_each_train_step.npy
-      sample_test = np.load('SIFTETS.npy').reshape([504,45,45,1])[0:128]
+      elif config.dataset == 'data-alocc':
+        batch_idxs = min(len(sample), config.train_size) // config.batch_size
 
       for idx in xrange(0, batch_idxs):
         if config.dataset == 'mnist':
           batch = self.data[idx * config.batch_size:(idx + 1) * config.batch_size]
           batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
+
         elif config.dataset == 'UCSD':
+          batch = sample[idx * config.batch_size:(idx + 1) * config.batch_size]
+          batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
+
+        elif config.dataset == 'data-alocc':
           batch = sample[idx * config.batch_size:(idx + 1) * config.batch_size]
           batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
 
@@ -307,18 +339,8 @@ class ALOCC_Model(object):
                 },
               )
 
-              sample_test_out = self.sess.run(
-                [self.sampler],
-                feed_dict={
-                    self.z: sample_test
-                },
-              )
               # export images
-              scipy.misc.imsave('./{}/z_test_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
-                            montage(samples[:, :, :, 0]))
-
-              # export images
-              scipy.misc.imsave('./{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
+              imageio.imwrite('./{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
                                 montage(samples[:, :, :, 0]))
 
               msg = "[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
@@ -380,7 +402,7 @@ class ALOCC_Model(object):
       s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
       s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-      hae0 = lrelu(self.g_bn4(conv2d(z, self.df_dim * 2, name='g_encoder_h0_conv')))
+      hae0 = lrelu(self.g_bn4(conv2d(z   , self.df_dim * 2, name='g_encoder_h0_conv')))
       hae1 = lrelu(self.g_bn5(conv2d(hae0, self.df_dim * 4, name='g_encoder_h1_conv')))
       hae2 = lrelu(self.g_bn6(conv2d(hae1, self.df_dim * 8, name='g_encoder_h2_conv')))
 
@@ -471,6 +493,10 @@ class ALOCC_Model(object):
     tmp_shape = lst_image_slices.shape
     if self.dataset_name=='UCSD':
       tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
+
+    elif self.dataset_name=='data-alocc':
+      tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
+    
     else:
       tmp_lst_slices = lst_image_slices
     batch_idxs = len(tmp_lst_slices) // self.batch_size
@@ -485,7 +511,7 @@ class ALOCC_Model(object):
 
         # to log some images with d values
         #for idx,image in enumerate(results_g):
-        #  scipy.misc.imsave('samples/{}_{}.jpg'.format(idx,results_d[idx][0]),batch_data[idx,:,:,0])
+        #  imageio.imwrite('samples/{}_{}.jpg'.format(idx,results_d[idx][0]),batch_data[idx,:,:,0])
 
         lst_discriminator_v.extend(results_d)
         lst_generated_img.extend(results_g)
@@ -495,5 +521,5 @@ class ALOCC_Model(object):
     #plt.plot(np.array(lst_discriminator_v))
     #f.savefig('samples/d_values.jpg')
 
-    scipy.misc.imsave('./'+self.sample_dir+'/ALOCC_generated.jpg', montage(np.array(lst_generated_img)[:,:,:,0]))
-    scipy.misc.imsave('./'+self.sample_dir+'/ALOCC_input.jpg', montage(np.array(tmp_lst_slices)[:,:,:,0]))
+    imageio.imwrite('./'+self.sample_dir+'/ALOCC_generated.jpg', montage(np.array(lst_generated_img)[:,:,:,0]))
+    imageio.imwrite('./'+self.sample_dir+'/ALOCC_input.jpg', montage(np.array(tmp_lst_slices)[:,:,:,0]))
