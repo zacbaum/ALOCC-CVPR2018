@@ -46,7 +46,6 @@ def main(_):
     """
     The main function for training steps     
     """
-    pp.pprint(flags.FLAGS.__flags)
     n_per_itr_print_results = 100
     kb_work_on_patch = True
 
@@ -54,14 +53,22 @@ def main(_):
     # ---------------------------------------------------------------------------------------------
     # Manual Switchs ------------------------------------------------------------------------------
     # ---------------------------------------------------------------------------------------------
-    # DATASET PARAMETER : UCSD
-    #FLAGS.dataset = 'UCSD'
-    #FLAGS.dataset_address = './dataset/UCSD_Anomaly_Dataset.v1p2/UCSDped2/Train'
+    # DATASET PARAMETER : data-alocc
+    FLAGS.dataset = 'data-alocc'
+    FLAGS.dataset_address = './dataset/data-alocc/train'
+    kb_work_on_patch = False
+    nd_input_frame_size = (180, 270)
+    nd_slice_size = (180, 270)
+    n_stride = 1
 
-    nd_input_frame_size = (240, 360)
-    nd_slice_size = (45, 45)
-    n_stride = 25
-    n_fetch_data = 600
+    # ---------------------------------------------------------------------------------------------
+    # DATASET PARAMETER : UCSD
+    # FLAGS.dataset = 'UCSD'
+    # FLAGS.dataset_address = './dataset/UCSD_Anomaly_Dataset.v1p2/UCSDped2/Train'
+    # nd_input_frame_size = (240, 360)
+    # nd_slice_size = (45, 45)
+    # n_stride = 25
+    # n_fetch_data = 600
     # ---------------------------------------------------------------------------------------------
     # # DATASET PARAMETER : MNIST
     # FLAGS.dataset = 'mnist'
@@ -78,6 +85,8 @@ def main(_):
 
     FLAGS.sample_dir = 'export/'+FLAGS.dataset +'_%d.%d'%(nd_slice_size[0],nd_slice_size[1])
     FLAGS.input_fname_pattern = '*'
+
+    pp.pprint(flags.FLAGS.__flags)
 
     check_some_assertions()
 
@@ -108,8 +117,7 @@ def main(_):
                     n_stride=n_stride,
                     n_per_itr_print_results=n_per_itr_print_results,
                     kb_work_on_patch=kb_work_on_patch,
-                    nd_input_frame_size = nd_input_frame_size,
-                    n_fetch_data=n_fetch_data)
+                    nd_input_frame_size = nd_input_frame_size)
 
         #show_all_variables()
 
