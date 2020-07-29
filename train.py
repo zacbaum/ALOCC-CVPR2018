@@ -91,7 +91,7 @@ def main(_):
     check_some_assertions()
 
     # manual handling of GPU
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.4)
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
     run_config = tf.ConfigProto(gpu_options=gpu_options)
     run_config.gpu_options.allow_growth=True
 

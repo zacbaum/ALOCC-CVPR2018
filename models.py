@@ -493,12 +493,10 @@ class ALOCC_Model(object):
     tmp_shape = lst_image_slices.shape
     if self.dataset_name=='UCSD':
       tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
-
-    elif self.dataset_name=='data-alocc':
-      tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
-    
+  
     else:
       tmp_lst_slices = lst_image_slices
+
     batch_idxs = len(tmp_lst_slices) // self.batch_size
 
     print('start new process ...')
@@ -510,8 +508,9 @@ class ALOCC_Model(object):
         #results = self.sess.run(self.sampler, feed_dict={self.z: batch_data})
 
         # to log some images with d values
-        #for idx,image in enumerate(results_g):
-        #  imageio.imwrite('samples/{}_{}.jpg'.format(idx,results_d[idx][0]),batch_data[idx,:,:,0])
+        for idx, image in enumerate(results_g):
+
+          imageio.imwrite('samples/{}_{:5f}.jpg'.format(idx,results_d[idx][0]),batch_data[idx,:,:,0])
 
         lst_discriminator_v.extend(results_d)
         lst_generated_img.extend(results_g)
