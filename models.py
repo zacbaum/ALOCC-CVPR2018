@@ -1,5 +1,4 @@
 from __future__ import division
-from tensorflow.examples.tutorials.mnist import input_data
 import re
 from ops import *
 from utils import *
@@ -8,16 +7,40 @@ import logging
 import matplotlib.pyplot as plt
 import time
 
+
 class ALOCC_Model(object):
-  def __init__(self, sess,
-               input_height=45,input_width=45, output_height=64, output_width=64,
-               batch_size=128, sample_num = 128, attention_label=1, is_training=True,
-               z_dim=100, gf_dim=16, df_dim=16, gfc_dim=512, dfc_dim=512, c_dim=3,
-               dataset_name=None, dataset_address=None, input_fname_pattern=None,
-               checkpoint_dir=None, log_dir=None, sample_dir=None, r_alpha = 0.2,
-               kb_work_on_patch=True, nd_input_frame_size=(240, 360), nd_patch_size=(10, 10), n_stride=1,
-               n_fetch_data=10, n_per_itr_print_results=500):
-    """
+    def __init__(
+        self,
+        sess,
+        input_height=45,
+        input_width=45,
+        output_height=64,
+        output_width=64,
+        batch_size=128,
+        sample_num=128,
+        attention_label=1,
+        is_training=True,
+        z_dim=100,
+        gf_dim=16,
+        df_dim=16,
+        gfc_dim=512,
+        dfc_dim=512,
+        c_dim=3,
+        dataset_name=None,
+        dataset_address=None,
+        input_fname_pattern=None,
+        checkpoint_dir=None,
+        log_dir=None,
+        sample_dir=None,
+        r_alpha=0.2,
+        kb_work_on_patch=True,
+        nd_input_frame_size=(240, 360),
+        nd_patch_size=(10, 10),
+        n_stride=1,
+        n_fetch_data=10,
+        n_per_itr_print_results=500,
+    ):
+        """
     This is the main class of our Adversarially Learned One-Class Classifier for Novelty Detection
     :param sess: TensorFlow session      
     :param batch_size: The size of batch. Should be specified before training. [128]
@@ -38,487 +61,529 @@ class ALOCC_Model(object):
     :param n_per_itr_print_results: # of printed iteration   
     """
 
-    self.n_per_itr_print_results=n_per_itr_print_results
-    self.nd_input_frame_size = nd_input_frame_size
-    self.b_work_on_patch = kb_work_on_patch
-    self.sample_dir = sample_dir
+        self.n_per_itr_print_results = n_per_itr_print_results
+        self.nd_input_frame_size = nd_input_frame_size
+        self.b_work_on_patch = kb_work_on_patch
+        self.sample_dir = sample_dir
 
-    self.sess = sess
-    self.is_training = is_training
+        self.sess = sess
+        self.is_training = is_training
 
-    self.r_alpha = r_alpha
+        self.r_alpha = r_alpha
 
-    self.batch_size = batch_size
-    self.sample_num = sample_num
+        self.batch_size = batch_size
+        self.sample_num = sample_num
 
-    self.input_height = input_height
-    self.input_width = input_width
-    self.output_height = output_height
-    self.output_width = output_width
+        self.input_height = input_height
+        self.input_width = input_width
+        self.output_height = output_height
+        self.output_width = output_width
 
-    self.z_dim = z_dim
+        self.z_dim = z_dim
 
-    self.gf_dim = gf_dim
-    self.df_dim = df_dim
+        self.gf_dim = gf_dim
+        self.df_dim = df_dim
 
-    self.gfc_dim = gfc_dim
-    self.dfc_dim = dfc_dim
+        self.gfc_dim = gfc_dim
+        self.dfc_dim = dfc_dim
 
-    # batch normalization : deals with poor initialization helps gradient flow
-    self.d_bn1 = batch_norm(name='d_bn1')
-    self.d_bn2 = batch_norm(name='d_bn2')
-    self.d_bn3 = batch_norm(name='d_bn3')
-    self.d_bn4 = batch_norm(name='d_bn4')
-    self.g_bn0 = batch_norm(name='g_bn0')
-    self.g_bn1 = batch_norm(name='g_bn1')
-    self.g_bn2 = batch_norm(name='g_bn2')
-    self.g_bn3 = batch_norm(name='g_bn3')
-    self.g_bn4 = batch_norm(name='g_bn4')
-    self.g_bn5 = batch_norm(name='g_bn5')
-    self.g_bn6 = batch_norm(name='g_bn6')
+        # batch normalization : deals with poor initialization helps gradient flow
+        self.d_bn1 = batch_norm(name="d_bn1")
+        self.d_bn2 = batch_norm(name="d_bn2")
+        self.d_bn3 = batch_norm(name="d_bn3")
+        self.d_bn4 = batch_norm(name="d_bn4")
+        self.g_bn0 = batch_norm(name="g_bn0")
+        self.g_bn1 = batch_norm(name="g_bn1")
+        self.g_bn2 = batch_norm(name="g_bn2")
+        self.g_bn3 = batch_norm(name="g_bn3")
+        self.g_bn4 = batch_norm(name="g_bn4")
+        self.g_bn5 = batch_norm(name="g_bn5")
+        self.g_bn6 = batch_norm(name="g_bn6")
 
-    self.dataset_name = dataset_name
-    self.dataset_address= dataset_address
-    self.input_fname_pattern = input_fname_pattern
-    self.checkpoint_dir = checkpoint_dir
-    self.log_dir = log_dir
+        self.dataset_name = dataset_name
+        self.inlier_dataset_address = os.path.join(dataset_address, 'in')
+        self.outlier_dataset_address = os.path.join(dataset_address, 'out')
+        self.input_fname_pattern = input_fname_pattern
+        self.checkpoint_dir = checkpoint_dir
 
-    self.attention_label = attention_label
+        self.attention_label = attention_label
 
-    if self.is_training:
-      logging.basicConfig(filename='ALOCC_loss.log', level=logging.INFO)
+        if self.is_training:
+            logging.basicConfig(filename="ALOCC_loss.log", level=logging.INFO)
 
-    if self.dataset_name == 'mnist':
-      mnist = input_data.read_data_sets(self.dataset_address)
-      specific_idx = np.where(mnist.train.labels == self.attention_label)[0]
-      self.data = mnist.train.images[specific_idx].reshape(-1, 28, 28, 1)
-      self.c_dim = 1
+        if self.dataset_name == "data-alocc":
+            inlier_image_paths = []
+            for sImageDirFiles in glob(
+                os.path.join(self.inlier_dataset_address, self.input_fname_pattern)
+            ):
+                inlier_image_paths.append(sImageDirFiles)
+            self.inlier_data = inlier_image_paths
 
-    elif self.dataset_name == 'UCSD':
-      self.nStride = n_stride
-      self.patch_size = nd_patch_size
-      self.patch_step = (n_stride, n_stride)
-      lst_image_paths = []
-      for s_image_dir_path in glob(os.path.join(self.dataset_address, self.input_fname_pattern)):
-        for sImageDirFiles in glob(os.path.join(s_image_dir_path+'/*')):
-          lst_image_paths.append(sImageDirFiles)
-      self.dataAddress = lst_image_paths
-      lst_forced_fetch_data = [self.dataAddress[x] for x in random.sample(range(0, len(lst_image_paths)), n_fetch_data)]
+            outlier_image_paths = []
+            for sImageDirFiles in glob(
+                os.path.join(self.outlier_dataset_address, self.input_fname_pattern)
+            ):
+                outlier_image_paths.append(sImageDirFiles)
+            self.outlier_data = outlier_image_paths
 
-      self.data = lst_forced_fetch_data
-      self.c_dim = 1
+            self.c_dim = 1
 
-    elif self.dataset_name == 'data-alocc':
-      lst_image_paths = []
-      for sImageDirFiles in glob(os.path.join(self.dataset_address, self.input_fname_pattern)):
-        lst_image_paths.append(sImageDirFiles)
-
-      self.data = lst_image_paths
-      self.c_dim = 1
-
-    else:
-      assert('Error in loading dataset')
-
-    self.grayscale = (self.c_dim == 1)
-    self.build_model()
-
-  # =========================================================================================================
-  def build_model(self):
-    image_dims = [self.input_height, self.input_width, self.c_dim]
-
-    self.inputs = tf.placeholder(tf.float32, [self.batch_size] + image_dims, name='real_images')
-    self.sample_inputs = tf.placeholder(tf.float32, [self.sample_num] + image_dims, name='sample_inputs')
-
-    inputs = self.inputs
-    sample_inputs = self.sample_inputs
-
-    self.z = tf.placeholder(tf.float32,[self.batch_size] + image_dims, name='z')
-
-    self.G = self.generator(self.z)
-    self.D, self.D_logits = self.discriminator(inputs)
-
-    self.sampler = self.sampler(self.z)
-    self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
-
-    # tesorboard setting
-    # self.z_sum = histogram_summary("z", self.z)
-    #self.d_sum = histogram_summary("d", self.D)
-    #self.d__sum = histogram_summary("d_", self.D_)
-    #self.G_sum = image_summary("G", self.G)
-
-    # Simple GAN's losses
-    self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits, labels=tf.ones_like(self.D)))
-    self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits_, labels=tf.zeros_like(self.D_)))
-    self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits_, labels=tf.ones_like(self.D_)))
-
-    # Refinement loss
-    self.g_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.G,labels=self.z))
-    self.g_loss  = self.g_loss + self.g_r_loss * self.r_alpha
-    self.d_loss = self.d_loss_real + self.d_loss_fake
-
-    self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
-    self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
-    self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
-    self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
-
-    t_vars = tf.trainable_variables()
-
-    self.d_vars = [var for var in t_vars if 'd_' in var.name]
-    self.g_vars = [var for var in t_vars if 'g_' in var.name]
-
-
-# =========================================================================================================
-  def train(self, config):
-    d_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(self.d_loss, var_list=self.d_vars)
-    g_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(self.g_loss, var_list=self.g_vars)
-
-    try:
-      tf.global_variables_initializer().run()
-    except:
-      tf.initialize_all_variables().run()
-
-
-    self.saver = tf.train.Saver()
-
-    self.g_sum = merge_summary([self.d_loss_fake_sum, self.g_loss_sum])
-    self.d_sum = merge_summary([self.d_loss_real_sum, self.d_loss_sum])
-
-    log_dir = os.path.join(self.log_dir, self.model_dir)
-    if not os.path.exists(log_dir):
-      os.makedirs(log_dir)
-
-    self.writer = SummaryWriter(log_dir, self.sess.graph)
-
-    if config.dataset == 'mnist':
-      sample = self.data[0:self.sample_num]
-
-    elif config.dataset =='UCSD':
-      if self.b_work_on_patch:
-        sample_files = self.data[0:10]
-      else:
-        sample_files = self.data[0:self.sample_num]
-      sample,_ = read_lst_images(sample_files, self.patch_size, self.patch_step, self.b_work_on_patch)
-      sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
-      sample = sample[0:self.sample_num]
-
-    elif config.dataset =='data-alocc':
-      sample_files = self.data[0:self.sample_num]
-      sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
-      sample = sample[0:self.sample_num]
-
-    # export images
-    sample_inputs = np.array(sample).astype(np.float32)
-    imageio.imwrite('./{}/train_input_samples.jpg'.format(config.sample_dir), montage(sample_inputs[:,:,:,0]))
-
-    # load previous checkpoint
-    counter = 1
-    could_load, checkpoint_counter = self.load(self.checkpoint_dir)
-    if could_load:
-      counter = checkpoint_counter
-      print(" [*] Load SUCCESS")
-    else:
-      print(" [!] Load failed...")
-
-    # load traning data
-    if config.dataset == 'mnist':
-      sample_w_noise = get_noisy_data(self.data)
-    
-    if config.dataset == 'UCSD':
-      sample_files = self.data
-      sample, _ = read_lst_images(sample_files, self.patch_size, self.patch_step, self.b_work_on_patch)
-      sample = np.array(sample).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
-      sample_w_noise,_ = read_lst_images_w_noise(sample_files, self.patch_size, self.patch_step)
-      sample_w_noise = np.array(sample_w_noise).reshape(-1, self.patch_size[0], self.patch_size[1], 1)
-
-    if config.dataset == 'data-alocc':
-      sample_files = self.data
-      t = time.time()
-      sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
-      t = time.time() - t
-      print(" [*] Loaded Data in {:3f}s".format(t))
-      sample_w_noise = get_noisy_data(sample)
-      print(" [*] Loaded Noisy Data")
-      #sample_w_noise = read_lst_images_w_noise2(sample_files, None, None)
-
-    for epoch in xrange(config.epoch):
-      print('Epoch ({}/{})-------------------------------------------------'.format(epoch,config.epoch))
-      if config.dataset == 'mnist':
-        batch_idxs = min(len(self.data), config.train_size) // config.batch_size
-
-      elif config.dataset == 'UCSD':
-        batch_idxs = min(len(sample), config.train_size) // config.batch_size
-
-      elif config.dataset == 'data-alocc':
-        batch_idxs = min(len(sample), config.train_size) // config.batch_size
-
-      for idx in xrange(0, batch_idxs):
-        if config.dataset == 'mnist':
-          batch = self.data[idx * config.batch_size:(idx + 1) * config.batch_size]
-          batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
-
-        elif config.dataset == 'UCSD':
-          batch = sample[idx * config.batch_size:(idx + 1) * config.batch_size]
-          batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
-
-        elif config.dataset == 'data-alocc':
-          batch = sample[idx * config.batch_size:(idx + 1) * config.batch_size]
-          batch_noise = sample_w_noise[idx * config.batch_size:(idx + 1) * config.batch_size]
-
-        batch_images = np.array(batch).astype(np.float32)
-        batch_noise_images = np.array(batch_noise).astype(np.float32)
-
-        batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]).astype(np.float32)
-
-        if config.dataset == 'mnist':
-          # Update D network
-          _, summary_str = self.sess.run([d_optim, self.d_sum],
-                                         feed_dict={self.inputs: batch_images, self.z: batch_noise_images})
-          self.writer.add_summary(summary_str, counter)
-
-          # Update G network
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                         feed_dict={self.z: batch_noise_images})
-          self.writer.add_summary(summary_str, counter)
-
-          # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                         feed_dict={self.z: batch_noise_images})
-          self.writer.add_summary(summary_str, counter)
-
-          errD_fake = self.d_loss_fake.eval({self.z: batch_noise_images})
-          errD_real = self.d_loss_real.eval({self.inputs: batch_images})
-          errG = self.g_loss.eval({self.z: batch_noise_images})
         else:
-          # update discriminator
-          _, summary_str = self.sess.run([d_optim, self.d_sum],
-                                          feed_dict={ self.inputs: batch_images, self.z: batch_noise_images })
-          self.writer.add_summary(summary_str, counter)
+            assert "Error in loading dataset"
 
-          # update refinement(generator)
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                          feed_dict={ self.z: batch_noise_images })
-          self.writer.add_summary(summary_str, counter)
+        self.grayscale = self.c_dim == 1
+        self.build_model()
 
-          # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-          _, summary_str = self.sess.run([g_optim, self.g_sum],
-                                          feed_dict={ self.z: batch_noise_images })
-          self.writer.add_summary(summary_str, counter)
-          
-          errD_fake = self.d_loss_fake.eval({ self.z: batch_noise_images })
-          errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
-          errG = self.g_loss.eval({self.z: batch_noise_images})
+    # =========================================================================================================
+    def build_model(self):
+        image_dims = [self.input_height, self.input_width, self.c_dim]
 
-        counter += 1
+        self.inputs = tf.placeholder(
+            tf.float32, [self.batch_size] + image_dims, name="real_images"
+        )
+        self.sample_inputs = tf.placeholder(
+            tf.float32, [self.sample_num] + image_dims, name="sample_inputs"
+        )
 
-        msg = "Epoch:[%2d][%4d/%4d]--> d_loss: %.8f, g_loss: %.8f" % (epoch, idx, batch_idxs, errD_fake+errD_real, errG)
-        print(msg)
-        logging.info(msg)
+        inputs = self.inputs
+        sample_inputs = self.sample_inputs
 
-        if np.mod(counter, self.n_per_itr_print_results) == 0:
-          if config.dataset == 'mnist':
-            samples, d_loss, g_loss = self.sess.run(
-              [self.sampler, self.d_loss, self.g_loss],
-              feed_dict={
-                  self.z: sample_inputs,
-                  self.inputs: sample_inputs
-              }
+        self.z = tf.placeholder(tf.float32, [self.batch_size] + image_dims, name="z")
+
+        self.G = self.generator(self.z)
+        self.D, self.D_logits = self.discriminator(inputs)
+
+        self.sampler = self.sampler(self.z)
+        self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+
+        # Simple GAN's losses
+        self.d_loss_real = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.D_logits, labels=tf.ones_like(self.D)
             )
-            manifold_h = int(np.ceil(np.sqrt(samples.shape[0])))
-            manifold_w = int(np.floor(np.sqrt(samples.shape[0])))
-            save_images(samples, [manifold_h, manifold_w],
-                  './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
-          # ====================================================================================================
-          else:
-            #try:
-              samples, d_loss, g_loss = self.sess.run(
-                [self.sampler, self.d_loss, self.g_loss],
-                feed_dict={
-                    self.z: sample_inputs,
-                    self.inputs: sample_inputs,
-                },
-              )
+        )
+        self.d_loss_fake = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.D_logits_, labels=tf.zeros_like(self.D_)
+            )
+        )
+        self.g_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.D_logits_, labels=tf.ones_like(self.D_)
+            )
+        )
 
-              # export images
-              imageio.imwrite('./{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx),
-                                montage(samples[:, :, :, 0]))
+        # Refinement loss
+        self.g_r_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.G, labels=self.z)
+        )
+        self.g_loss = self.g_loss + self.g_r_loss * self.r_alpha
+        self.d_loss = self.d_loss_real + self.d_loss_fake
 
-              msg = "[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
-              print(msg)
-              logging.info(msg)
+        self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
+        self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
+        self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
+        self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
-      self.save(config.checkpoint_dir, epoch)
+        t_vars = tf.trainable_variables()
 
-  # =========================================================================================================
-  def discriminator(self, image,reuse=False):
-    with tf.variable_scope("discriminator") as scope:
-      if reuse:
-        scope.reuse_variables()
+        self.d_vars = [var for var in t_vars if "d_" in var.name]
+        self.g_vars = [var for var in t_vars if "g_" in var.name]
 
+    # =========================================================================================================
+    def train(self, config):
+        d_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(
+            self.d_loss, var_list=self.d_vars
+        )
+        g_optim = tf.train.RMSPropOptimizer(config.learning_rate).minimize(
+            self.g_loss, var_list=self.g_vars
+        )
 
-      h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-      h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
-      h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
-      h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
-      h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
-      h5 = tf.nn.sigmoid(h4,name='d_output')
-      return h5, h4
+        try:
+            tf.global_variables_initializer().run()
+        except:
+            tf.initialize_all_variables().run()
 
-  # =========================================================================================================
-  def generator(self, z):
-    with tf.variable_scope("generator") as scope:
+        self.saver = tf.train.Saver()
 
-      s_h, s_w = self.output_height, self.output_width
-      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+        self.g_sum = merge_summary([self.d_loss_fake_sum, self.g_loss_sum])
+        self.d_sum = merge_summary([self.d_loss_real_sum, self.d_loss_sum])
 
-      hae0 = lrelu(self.g_bn4(conv2d(z   , self.df_dim * 2, name='g_encoder_h0_conv')))
-      hae1 = lrelu(self.g_bn5(conv2d(hae0, self.df_dim * 4, name='g_encoder_h1_conv')))
-      hae2 = lrelu(self.g_bn6(conv2d(hae1, self.df_dim * 8, name='g_encoder_h2_conv')))
+        sample_files = self.inlier_data[0 : self.sample_num]
+        sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
+        sample = sample[0 : self.sample_num]
 
-      h2, self.h2_w, self.h2_b = deconv2d(
-        hae2, [self.batch_size, s_h4, s_w4, self.gf_dim*2], name='g_decoder_h1', with_w=True)
-      h2 = tf.nn.relu(self.g_bn2(h2))
+        # export images
+        sample_in = np.array(sample).astype(np.float32)
+        imageio.imwrite(
+            "./{}/train_in_samples.jpg".format(config.sample_dir),
+            montage(sample_in[:, :, :, 0]),
+        )
 
-      h3, self.h3_w, self.h3_b = deconv2d(
-          h2, [self.batch_size, s_h2, s_w2, self.gf_dim*1], name='g_decoder_h0', with_w=True)
-      h3 = tf.nn.relu(self.g_bn3(h3))
+        sample_files = self.outlier_data[0 : self.sample_num]
+        sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
+        sample = sample[0 : self.sample_num]
 
-      h4, self.h4_w, self.h4_b = deconv2d(
-          h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_decoder_h00', with_w=True)
+        # export images
+        sample_out = np.array(sample).astype(np.float32)
+        imageio.imwrite(
+            "./{}/train_out_samples.jpg".format(config.sample_dir),
+            montage(sample_out[:, :, :, 0]),
+        )
 
-      return tf.nn.tanh(h4,name='g_output')
+        # load previous checkpoint
+        counter = 1
+        could_load, checkpoint_counter = self.load(self.checkpoint_dir)
+        if could_load:
+            counter = checkpoint_counter
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
 
-  # =========================================================================================================
-  def sampler(self, z, y=None):
-    with tf.variable_scope("generator") as scope:
-      scope.reuse_variables()
+        # load traning data
+        if config.dataset == "data-alocc":
+            t = time.time()
+            in_sample = read_lst_images(self.inlier_data, None, None, self.b_work_on_patch)
+            t = time.time() - t
+            print(" [*] Loaded Inlier Data in {:3f}s".format(t))
 
-      s_h, s_w = self.output_height, self.output_width
-      s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-      s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-      s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-      s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+            t = time.time()
+            out_sample = read_lst_images(self.outlier_data, None, None, self.b_work_on_patch)
+            t = time.time() - t
+            print(" [*] Loaded Outlier Data in {:3f}s".format(t))
 
-      hae0 = lrelu(self.g_bn4(conv2d(z   , self.df_dim * 2, name='g_encoder_h0_conv')))
-      hae1 = lrelu(self.g_bn5(conv2d(hae0, self.df_dim * 4, name='g_encoder_h1_conv')))
-      hae2 = lrelu(self.g_bn6(conv2d(hae1, self.df_dim * 8, name='g_encoder_h2_conv')))
+        for epoch in xrange(config.epoch):
+            print(
+                "Epoch ({}/{})-------------------------------------------------".format(
+                    epoch, config.epoch
+                )
+            )
+            if config.dataset == "data-alocc":
+                batch_idxs = min(len(in_sample), config.train_size) // config.batch_size
 
-      h2, self.h2_w, self.h2_b = deconv2d(
-        hae2, [self.batch_size, s_h4, s_w4, self.gf_dim * 2], name='g_decoder_h1', with_w=True)
-      h2 = tf.nn.relu(self.g_bn2(h2))
+            for idx in xrange(0, batch_idxs):
+                if config.dataset == "data-alocc":
+                    in_batch = in_sample[
+                        idx * config.batch_size : (idx + 1) * config.batch_size
+                    ]
+                    out_idxs = np.random.randint(len(out_sample), size=config.batch_size)
+                    out_batch = out_sample[out_idxs]
 
-      h3, self.h3_w, self.h3_b = deconv2d(
-        h2, [self.batch_size, s_h2, s_w2, self.gf_dim * 1], name='g_decoder_h0', with_w=True)
-      h3 = tf.nn.relu(self.g_bn3(h3))
+                in_batch_images = np.array(in_batch).astype(np.float32)
+                out_batch_images = np.array(out_batch).astype(np.float32)
 
-      h4, self.h4_w, self.h4_b = deconv2d(
-        h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_decoder_h00', with_w=True)
+                # update discriminator
+                _, summary_str = self.sess.run(
+                    [d_optim, self.d_sum],
+                    feed_dict={
+                        self.inputs: in_batch_images,
+                        self.z: out_batch_images,
+                    },
+                )
 
-      return tf.nn.tanh(h4,name='g_output')
+                # update refinement(generator)
+                _, summary_str = self.sess.run(
+                    [g_optim, self.g_sum], feed_dict={self.z: out_batch_images}
+                )
 
-  # =========================================================================================================
-  @property
-  def model_dir(self):
-    return "{}_{}_{}_{}".format(
-        self.dataset_name, self.batch_size,
-        self.output_height, self.output_width)
+                # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                _, summary_str = self.sess.run(
+                    [g_optim, self.g_sum], feed_dict={self.z: out_batch_images}
+                )
 
-  # =========================================================================================================
-  def save(self, checkpoint_dir, step):
-    model_name = "ALOCC_Model.model"
-    checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+                errD_fake = self.d_loss_fake.eval({self.z: out_batch_images})
+                errD_real = self.d_loss_real.eval({self.inputs: in_batch_images})
+                errG = self.g_loss.eval({self.z: out_batch_images})
 
-    if not os.path.exists(checkpoint_dir):
-      os.makedirs(checkpoint_dir)
+                counter += 1
 
-    self.saver.save(self.sess,
-            os.path.join(checkpoint_dir, model_name),
-            global_step=step)
+                msg = "Epoch:[%2d][%4d/%4d]--> d_loss: %.5f, g_loss: %.5f" % (
+                    epoch,
+                    idx,
+                    batch_idxs,
+                    errD_fake + errD_real,
+                    errG,
+                )
+                print(msg)
+                logging.info(msg)
 
-  # =========================================================================================================
-  def load(self, checkpoint_dir):
-    import re
-    print(" [*] Reading checkpoints...")
-    checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+                if np.mod(counter, self.n_per_itr_print_results) == 0:
+                    samples, d_loss, g_loss = self.sess.run(
+                        [self.sampler, self.d_loss, self.g_loss],
+                        feed_dict={
+                            self.z: sample_in,
+                            self.inputs: sample_in,
+                        },
+                    )
 
-    ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-    if ckpt and ckpt.model_checkpoint_path:
-      ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-      self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
-      counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
-      print(" [*] Success to read {}".format(ckpt_name))
-      return True, counter
-    else:
-      print(" [*] Failed to find a checkpoint")
-      return False, 0
+                    # export images
+                    imageio.imwrite(
+                        "./{}/train_in_{:02d}_{:04d}.png".format(
+                            config.sample_dir, epoch, idx
+                        ),
+                        montage(samples[:, :, :, 0]),
+                    )
 
-  # =========================================================================================================
+                    msg = "[Sample In] d_loss: %.5f, g_loss: %.5f" % (d_loss, g_loss)
+                    print(msg)
+                    logging.info(msg)
 
-  def f_check_checkpoint(self):
-    try:
-      tf.global_variables_initializer().run()
-    except:
-      tf.initialize_all_variables().run()
-    print(" [*] Reading checkpoints...")
-    self.saver = tf.train.Saver()
+                    samples, d_loss, g_loss = self.sess.run(
+                        [self.sampler, self.d_loss, self.g_loss],
+                        feed_dict={
+                            self.z: sample_out,
+                            self.inputs: sample_out,
+                        },
+                    )
 
-    ckpt = tf.train.get_checkpoint_state(self.checkpoint_dir)
-    if ckpt and ckpt.model_checkpoint_path:
-      ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-      self.saver.restore(self.sess, os.path.join(self.checkpoint_dir, ckpt_name))
-      counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
-      print(" [*] Success to read {}".format(ckpt_name))
-      could_load = True
-      checkpoint_counter = counter
-    else:
-      print(" [*] Failed to find a checkpoint")
-      could_load = False
-      checkpoint_counter =0
+                    # export images
+                    imageio.imwrite(
+                        "./{}/train_out_{:02d}_{:04d}.png".format(
+                            config.sample_dir, epoch, idx
+                        ),
+                        montage(samples[:, :, :, 0]),
+                    )
 
-    if could_load:
-      counter = checkpoint_counter
-      print(" [*] Load SUCCESS")
-      return counter
-    else:
-      print(" [!] Load failed...")
-      return -1
+                    msg = "[Sample Out] d_loss: %.5f, g_loss: %.5f" % (d_loss, g_loss)
+                    print(msg)
+                    logging.info(msg)
 
-  # =========================================================================================================
-  def f_test_frozen_model(self,lst_image_slices=[]):
-    lst_generated_img= []
-    lst_discriminator_v = []
-    tmp_shape = lst_image_slices.shape
-    if self.dataset_name=='UCSD':
-      tmp_lst_slices = lst_image_slices.reshape(-1, tmp_shape[2], tmp_shape[3], 1)
-  
-    else:
-      tmp_lst_slices = lst_image_slices
+            self.save(config.checkpoint_dir, epoch)
 
-    batch_idxs = len(tmp_lst_slices) // self.batch_size
+    # =========================================================================================================
+    def discriminator(self, image, reuse=False):
+        with tf.variable_scope("discriminator") as scope:
+            if reuse:
+                scope.reuse_variables()
 
-    print('start new process ...')
-    for i in xrange(0, batch_idxs):
-        batch_data = tmp_lst_slices[i * self.batch_size:(i + 1) * self.batch_size]
+            h0 = lrelu(conv2d(image, self.df_dim, name="d_h0_conv"))
+            h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim * 2, name="d_h1_conv")))
+            h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim * 4, name="d_h2_conv")))
+            h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim * 8, name="d_h3_conv")))
+            h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, "d_h3_lin")
+            h5 = tf.nn.sigmoid(h4, name="d_output")
+            return h5, h4
 
-        results_g = self.sess.run(self.G, feed_dict={self.z: batch_data})
-        results_d = self.sess.run(self.D_logits, feed_dict={self.inputs: batch_data})
-        #results = self.sess.run(self.sampler, feed_dict={self.z: batch_data})
+    # =========================================================================================================
+    def generator(self, z):
+        with tf.variable_scope("generator") as scope:
 
-        # to log some images with d values
-        for idx, image in enumerate(results_g):
+            s_h, s_w = self.output_height, self.output_width
+            s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+            s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+            s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+            s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
 
-          imageio.imwrite('samples/{}_{:5f}.jpg'.format(idx,results_d[idx][0]),batch_data[idx,:,:,0])
+            hae0 = lrelu(
+                self.g_bn4(conv2d(z, self.df_dim * 2, name="g_encoder_h0_conv"))
+            )
+            hae1 = lrelu(
+                self.g_bn5(conv2d(hae0, self.df_dim * 4, name="g_encoder_h1_conv"))
+            )
+            hae2 = lrelu(
+                self.g_bn6(conv2d(hae1, self.df_dim * 8, name="g_encoder_h2_conv"))
+            )
 
-        lst_discriminator_v.extend(results_d)
-        lst_generated_img.extend(results_g)
-        print('finish pp ... {}/{}'.format(i,batch_idxs))
+            h2, self.h2_w, self.h2_b = deconv2d(
+                hae2,
+                [self.batch_size, s_h4, s_w4, self.gf_dim * 2],
+                name="g_decoder_h1",
+                with_w=True,
+            )
+            h2 = tf.nn.relu(self.g_bn2(h2))
 
-    #f = plt.figure()
-    #plt.plot(np.array(lst_discriminator_v))
-    #f.savefig('samples/d_values.jpg')
+            h3, self.h3_w, self.h3_b = deconv2d(
+                h2,
+                [self.batch_size, s_h2, s_w2, self.gf_dim * 1],
+                name="g_decoder_h0",
+                with_w=True,
+            )
+            h3 = tf.nn.relu(self.g_bn3(h3))
 
-    imageio.imwrite('./'+self.sample_dir+'/ALOCC_generated.jpg', montage(np.array(lst_generated_img)[:,:,:,0]))
-    imageio.imwrite('./'+self.sample_dir+'/ALOCC_input.jpg', montage(np.array(tmp_lst_slices)[:,:,:,0]))
+            h4, self.h4_w, self.h4_b = deconv2d(
+                h3,
+                [self.batch_size, s_h, s_w, self.c_dim],
+                name="g_decoder_h00",
+                with_w=True,
+            )
+
+            return tf.nn.tanh(h4, name="g_output")
+
+    # =========================================================================================================
+    def sampler(self, z, y=None):
+        with tf.variable_scope("generator") as scope:
+            scope.reuse_variables()
+
+            s_h, s_w = self.output_height, self.output_width
+            s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
+            s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
+            s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
+            s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
+
+            hae0 = lrelu(
+                self.g_bn4(conv2d(z, self.df_dim * 2, name="g_encoder_h0_conv"))
+            )
+            hae1 = lrelu(
+                self.g_bn5(conv2d(hae0, self.df_dim * 4, name="g_encoder_h1_conv"))
+            )
+            hae2 = lrelu(
+                self.g_bn6(conv2d(hae1, self.df_dim * 8, name="g_encoder_h2_conv"))
+            )
+
+            h2, self.h2_w, self.h2_b = deconv2d(
+                hae2,
+                [self.batch_size, s_h4, s_w4, self.gf_dim * 2],
+                name="g_decoder_h1",
+                with_w=True,
+            )
+            h2 = tf.nn.relu(self.g_bn2(h2))
+
+            h3, self.h3_w, self.h3_b = deconv2d(
+                h2,
+                [self.batch_size, s_h2, s_w2, self.gf_dim * 1],
+                name="g_decoder_h0",
+                with_w=True,
+            )
+            h3 = tf.nn.relu(self.g_bn3(h3))
+
+            h4, self.h4_w, self.h4_b = deconv2d(
+                h3,
+                [self.batch_size, s_h, s_w, self.c_dim],
+                name="g_decoder_h00",
+                with_w=True,
+            )
+
+            return tf.nn.tanh(h4, name="g_output")
+
+    # =========================================================================================================
+    @property
+    def model_dir(self):
+        return "{}_{}_{}_{}_{}".format(
+            self.dataset_name, self.batch_size, self.output_height, self.output_width, self.r_alpha
+        )
+
+    # =========================================================================================================
+    def save(self, checkpoint_dir, step):
+        model_name = "ALOCC_Model.model"
+        checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+
+        if not os.path.exists(checkpoint_dir):
+            os.makedirs(checkpoint_dir)
+
+        self.saver.save(
+            self.sess, os.path.join(checkpoint_dir, model_name), global_step=step
+        )
+
+    # =========================================================================================================
+    def load(self, checkpoint_dir):
+        import re
+
+        print(" [*] Reading checkpoints...")
+        checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+
+        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+            counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
+            print(" [*] Success to read {}".format(ckpt_name))
+            return True, counter
+        else:
+            print(" [*] Failed to find a checkpoint")
+            return False, 0
+
+    # =========================================================================================================
+
+    def f_check_checkpoint(self):
+        try:
+            tf.global_variables_initializer().run()
+        except:
+            tf.initialize_all_variables().run()
+        print(" [*] Reading checkpoints...")
+        self.saver = tf.train.Saver()
+
+        ckpt = tf.train.get_checkpoint_state(self.checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            self.saver.restore(self.sess, os.path.join(self.checkpoint_dir, ckpt_name))
+            counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
+            print(" [*] Success to read {}".format(ckpt_name))
+            could_load = True
+            checkpoint_counter = counter
+        else:
+            print(" [*] Failed to find a checkpoint")
+            could_load = False
+            checkpoint_counter = 0
+
+        if could_load:
+            counter = checkpoint_counter
+            print(" [*] Load SUCCESS")
+            return counter
+        else:
+            print(" [!] Load failed...")
+            return -1
+
+    # =========================================================================================================
+    def f_test_frozen_model(self, lst_image_slices, lst_image_paths):
+        lst_generated_img = []
+        lst_discriminator_v = []
+        lst_discriminator_of_g_v = []
+        tmp_shape = lst_image_slices.shape
+        tmp_lst_slices = lst_image_slices
+
+        batch_idxs = len(tmp_lst_slices) // self.batch_size
+
+        print("start new process ...")
+        for i in xrange(0, batch_idxs):
+            batch_data = tmp_lst_slices[i * self.batch_size : (i + 1) * self.batch_size]
+
+            results_g = self.sess.run(self.G, feed_dict={self.z: batch_data})
+            
+            results_d = self.sess.run(
+                self.D_logits, feed_dict={self.inputs: batch_data}
+            )
+            results_d_of_g = self.sess.run(
+                self.D_logits, feed_dict={self.inputs: results_g}
+            )
+            '''
+            # to log some images with d values
+            for idx, image in enumerate(results_g):
+
+              if results_d_of_g[idx][0] > -20:
+
+                imageio.imwrite(
+                    "./"
+                    + self.sample_dir
+                    + "/{:5f}_{}.jpg".format(
+                      results_d_of_g[idx][0], 
+                      os.path.splitext(os.path.basename(lst_image_paths[(i * self.batch_size) + idx]))[0]
+                    ),
+                    batch_data[idx, :, :, 0],
+                )
+            '''
+            lst_discriminator_v.extend(results_d)
+            lst_discriminator_of_g_v.extend(results_d_of_g)
+            lst_generated_img.extend(results_g)
+            print("finish pp ... {}/{}".format(i, batch_idxs))
+
+        f = plt.figure()
+        x = np.sort(np.squeeze(np.array(lst_discriminator_v)))
+        plt.plot(x)
+        f.savefig("./" + self.sample_dir + "/d_values.jpg")
+
+        f = plt.figure()
+        x = np.sort(np.squeeze(np.array(lst_discriminator_of_g_v)))
+        plt.plot(x)
+        f.savefig("./" + self.sample_dir + "/d_of_g_values.jpg")
+
+        np.save("./" + self.sample_dir + "/d_values.npy", lst_discriminator_v)
+        np.save("./" + self.sample_dir + "/d_of_g_values.npy", lst_discriminator_of_g_v)
+
+        imageio.imwrite(
+            "./" + self.sample_dir + "/ALOCC_generated.jpg",
+            montage(np.array(lst_generated_img)[:100, :, :, 0]),
+        )
+        imageio.imwrite(
+            "./" + self.sample_dir + "/ALOCC_input.jpg",
+            montage(np.array(tmp_lst_slices)[:100, :, :, 0]),
+        )
