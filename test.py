@@ -55,6 +55,7 @@ flags.DEFINE_string(
     "sample_dir", "samples", "Directory name to save the image samples [samples]"
 )
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
+flags.DEFINE_integer("use_ckpt", -1, "CHeckpoint number to use, -1 uses most recent [-1]")
 FLAGS = flags.FLAGS
 
 
@@ -88,7 +89,7 @@ def main(_):
     FLAGS.output_height = nd_slice_size[1]
 
     FLAGS.dataset = "data-alocc"
-    FLAGS.dataset_address = os.path.join("./dataset/data-alocc/test/out", FLAGS.r_alpha)
+    FLAGS.dataset_address = "./dataset/data-alocc/test/in"
     FLAGS.checkpoint_dir = "./checkpoint/" + "{}_{}_{}_{}_{}".format(
         FLAGS.dataset,
         FLAGS.batch_size,
@@ -96,7 +97,7 @@ def main(_):
         FLAGS.output_width,
         FLAGS.r_alpha
     )
-    FLAGS.sample_dir = "./samples/out"
+    FLAGS.sample_dir = os.path.join("./samples/in", (str(FLAGS.use_ckpt) + "_" + str(FLAGS.r_alpha)))
 
     check_some_assertions()
 
@@ -141,7 +142,7 @@ def main(_):
 
         print("--------------------------------------------------")
         print("Load Pretrained Model...")
-        tmp_ALOCC_model.f_check_checkpoint()
+        tmp_ALOCC_model.f_check_checkpoint(checkpoint_number=FLAGS.use_ckpt)
 
         if FLAGS.dataset == "data-alocc":
             lst_image_paths = [

@@ -204,7 +204,7 @@ class ALOCC_Model(object):
         except:
             tf.initialize_all_variables().run()
 
-        self.saver = tf.train.Saver()
+        self.saver = tf.train.Saver(max_to_keep=100)
 
         self.g_sum = merge_summary([self.d_loss_fake_sum, self.g_loss_sum])
         self.d_sum = merge_summary([self.d_loss_real_sum, self.d_loss_sum])
@@ -483,18 +483,18 @@ class ALOCC_Model(object):
 
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
-            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
-            counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
-            print(" [*] Success to read {}".format(ckpt_name))
-            return True, counter
+          ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+          self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+          counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
+          print(" [*] Success to read {}".format(ckpt_name))
+          return True, counter
         else:
             print(" [*] Failed to find a checkpoint")
             return False, 0
 
     # =========================================================================================================
 
-    def f_check_checkpoint(self):
+    def f_check_checkpoint(self, checkpoint_number=-1):
         try:
             tf.global_variables_initializer().run()
         except:
@@ -504,7 +504,7 @@ class ALOCC_Model(object):
 
         ckpt = tf.train.get_checkpoint_state(self.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
-            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            ckpt_name = os.path.basename(ckpt.all_model_checkpoint_paths[checkpoint_number])
             self.saver.restore(self.sess, os.path.join(self.checkpoint_dir, ckpt_name))
             counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
             print(" [*] Success to read {}".format(ckpt_name))
