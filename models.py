@@ -212,19 +212,25 @@ class ALOCC_Model(object):
         sample_files = self.inlier_data[0 : self.sample_num]
         sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
         sample = sample[0 : self.sample_num]
-
-        # export images
         sample_in = np.array(sample).astype(np.float32)
         imageio.imwrite(
             "./{}/train_in_samples.jpg".format(config.sample_dir),
             montage(sample_in[:, :, :, 0]),
         )
 
+        sample_files = self.inlier_data[0 : self.sample_num]
+        sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
+        sample = get_noisy_data(sample)
+        sample = sample[0 : self.sample_num]
+        sample_noise = np.array(sample).astype(np.float32)
+        imageio.imwrite(
+            "./{}/train_noise_samples.jpg".format(config.sample_dir),
+            montage(sample_noise[:, :, :, 0]),
+        )
+
         sample_files = self.outlier_data[0 : self.sample_num]
         sample = read_lst_images(sample_files, None, None, self.b_work_on_patch)
         sample = sample[0 : self.sample_num]
-
-        # export images
         sample_out = np.array(sample).astype(np.float32)
         imageio.imwrite(
             "./{}/train_out_samples.jpg".format(config.sample_dir),
@@ -248,6 +254,11 @@ class ALOCC_Model(object):
             print(" [*] Loaded Inlier Data in {:3f}s".format(t))
 
             t = time.time()
+            noise_sample = get_noisy_data(in_sample)
+            t = time.time() - t
+            print(" [*] Loaded Noisy Data in {:3f}s".format(t))
+
+            t = time.time()
             out_sample = read_lst_images(self.outlier_data, None, None, self.b_work_on_patch)
             t = time.time() - t
             print(" [*] Loaded Outlier Data in {:3f}s".format(t))
@@ -266,38 +277,42 @@ class ALOCC_Model(object):
                     in_batch = in_sample[
                         idx * config.batch_size : (idx + 1) * config.batch_size
                     ]
+                    noise_batch = noise_sample[
+                        idx * config.batch_size:(idx + 1) * config.batch_size
+                    ]
+                    '''
                     out_idxs = np.random.randint(len(out_sample), size=config.batch_size)
                     out_batch = out_sample[out_idxs]
-
+                    '''
                 in_batch_images = np.array(in_batch).astype(np.float32)
-                out_batch_images = np.array(out_batch).astype(np.float32)
+                noise_batch_images = np.array(noise_batch).astype(np.float32)
 
                 # update discriminator
                 _, summary_str = self.sess.run(
                     [d_optim, self.d_sum],
                     feed_dict={
                         self.inputs: in_batch_images,
-                        self.z: out_batch_images,
+                        self.z: noise_batch_images,
                     },
                 )
 
                 # update refinement(generator)
                 _, summary_str = self.sess.run(
-                    [g_optim, self.g_sum], feed_dict={self.z: out_batch_images}
+                    [g_optim, self.g_sum], feed_dict={self.z: noise_batch_images}
                 )
 
                 # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
                 _, summary_str = self.sess.run(
-                    [g_optim, self.g_sum], feed_dict={self.z: out_batch_images}
+                    [g_optim, self.g_sum], feed_dict={self.z: noise_batch_images}
                 )
 
-                errD_fake = self.d_loss_fake.eval({self.z: out_batch_images})
+                errD_fake = self.d_loss_fake.eval({self.z: noise_batch_images})
                 errD_real = self.d_loss_real.eval({self.inputs: in_batch_images})
-                errG = self.g_loss.eval({self.z: out_batch_images})
+                errG = self.g_loss.eval({self.z: noise_batch_images})
 
                 counter += 1
 
-                msg = "Epoch:[%2d][%4d/%4d]--> d_loss: %.5f, g_loss: %.5f" % (
+                msg = "Epoch:[%2d][%4d/%4d]--> d_loss: %.8f, g_loss: %.8f" % (
                     epoch,
                     idx,
                     batch_idxs,
@@ -308,6 +323,7 @@ class ALOCC_Model(object):
                 logging.info(msg)
 
                 if np.mod(counter, self.n_per_itr_print_results) == 0:
+                    # INLIERS
                     samples, d_loss, g_loss = self.sess.run(
                         [self.sampler, self.d_loss, self.g_loss],
                         feed_dict={
@@ -315,19 +331,35 @@ class ALOCC_Model(object):
                             self.inputs: sample_in,
                         },
                     )
-
-                    # export images
                     imageio.imwrite(
                         "./{}/train_in_{:02d}_{:04d}.png".format(
                             config.sample_dir, epoch, idx
                         ),
                         montage(samples[:, :, :, 0]),
                     )
-
-                    msg = "[Sample In] d_loss: %.5f, g_loss: %.5f" % (d_loss, g_loss)
+                    msg = "[Sample In] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
                     print(msg)
                     logging.info(msg)
 
+                    # NOISY
+                    samples, d_loss, g_loss = self.sess.run(
+                        [self.sampler, self.d_loss, self.g_loss],
+                        feed_dict={
+                            self.z: sample_noise,
+                            self.inputs: sample_noise,
+                        },
+                    )
+                    imageio.imwrite(
+                        "./{}/train_noise_{:02d}_{:04d}.png".format(
+                            config.sample_dir, epoch, idx
+                        ),
+                        montage(samples[:, :, :, 0]),
+                    )
+                    msg = "[Sample Noise] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
+                    print(msg)
+                    logging.info(msg)
+
+                    # OUTLIERS
                     samples, d_loss, g_loss = self.sess.run(
                         [self.sampler, self.d_loss, self.g_loss],
                         feed_dict={
@@ -335,16 +367,13 @@ class ALOCC_Model(object):
                             self.inputs: sample_out,
                         },
                     )
-
-                    # export images
                     imageio.imwrite(
                         "./{}/train_out_{:02d}_{:04d}.png".format(
                             config.sample_dir, epoch, idx
                         ),
                         montage(samples[:, :, :, 0]),
                     )
-
-                    msg = "[Sample Out] d_loss: %.5f, g_loss: %.5f" % (d_loss, g_loss)
+                    msg = "[Sample Out] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)
                     print(msg)
                     logging.info(msg)
 
@@ -524,7 +553,7 @@ class ALOCC_Model(object):
             return -1
 
     # =========================================================================================================
-    def f_test_frozen_model(self, lst_image_slices, lst_image_paths):
+    def f_test_frozen_model(self, lst_image_slices):
         lst_generated_img = []
         lst_discriminator_v = []
         lst_discriminator_of_g_v = []
@@ -545,22 +574,7 @@ class ALOCC_Model(object):
             results_d_of_g = self.sess.run(
                 self.D_logits, feed_dict={self.inputs: results_g}
             )
-            '''
-            # to log some images with d values
-            for idx, image in enumerate(results_g):
 
-              if results_d_of_g[idx][0] > -20:
-
-                imageio.imwrite(
-                    "./"
-                    + self.sample_dir
-                    + "/{:5f}_{}.jpg".format(
-                      results_d_of_g[idx][0], 
-                      os.path.splitext(os.path.basename(lst_image_paths[(i * self.batch_size) + idx]))[0]
-                    ),
-                    batch_data[idx, :, :, 0],
-                )
-            '''
             lst_discriminator_v.extend(results_d)
             lst_discriminator_of_g_v.extend(results_d_of_g)
             lst_generated_img.extend(results_g)
